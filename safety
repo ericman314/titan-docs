@@ -1,0 +1,76 @@
+// Reset integral reset flags
+#"E-105 Integral Reset" := false;
+
+IF #Stopped THEN
+    
+    // Polycolds
+    "PC2500".DesiredOperatingMode := -1;
+    "PC4000".DesiredOperatingMode := -1;
+    
+    // Cooling Loop
+    "OutputDB"."P-102 1" := false;
+    "OutputDB"."E-105" := 0;
+    "PID E-105".Auto := false;
+    "OutputDB"."T-101 N2" := false;
+    "OutputDB"."T-101 Vent" := false;
+    
+END_IF;
+
+/////////////////////
+///// Polycolds /////
+/////////////////////
+
+// Prevent invalid state transitions
+IF "PC2500".OperatingMode = -1 AND "PC2500".DesiredOperatingMode > 0 THEN
+    "PC2500".DesiredOperatingMode := -1;
+END_IF;
+
+IF "PC2500".OperatingMode = 0 AND "PC2500".DesiredOperatingMode > 1 THEN
+    "PC2500".DesiredOperatingMode := 0;
+END_IF;
+
+IF "PC2500".OperatingMode = 2 AND "PC2500".DesiredOperatingMode = 1 THEN
+    "PC2500".DesiredOperatingMode := 2;
+END_IF;
+
+////////////////////////
+///// Cooling loop /////
+////////////////////////
+
+// P-102 overpressure
+IF "InputDB"."PT-102" > 60 OR "InputDB"."PT-104" > 60 THEN
+    "OutputDB"."P-102 1" := false;
+END_IF;
+
+// Protect against N2 being left on
+IF "InputDB"."PT-102" > 50 OR "InputDB"."PT-104" > 50 THEN
+    "OutputDB"."T-101 N2" := false;
+END_IF;
+
+// E-105 overheat
+IF "InputDB"."TT-104" > 0 OR "InputDB"."TT-105" > 0 THEN
+    // Set heater output to 0
+    "OutputDB"."E-105" := 0;
+    // Reset integral if it is active
+    #"E-105 Integral Reset" := true;
+    "CONT_C_E-105".I_ITLVAL := 0 - "CONT_C_E-105".LMN_P;
+END_IF;
+
+// Don't allow E-105 if P-102 is off
+IF NOT "OutputDB"."P-102 1" OR "OutputDB"."P-102 OI" < 5 THEN
+    // Set heater output to 0
+    "OutputDB"."E-105" := 0;
+    // Reset integral if it is active
+    #"E-105 Integral Reset" := true;
+    "CONT_C_E-105".I_ITLVAL := 0 - "CONT_C_E-105".LMN_P;
+END_IF;
+
+// Limits
+"OutputDB"."P-102 OI" := LIMIT(MN := 0, IN := "OutputDB"."P-102 OI", MX := 100);
+"PID E-105".Setpoint := LIMIT(MN := -200, IN := "PID E-105".Setpoint, MX := 0);
+"PID E-105".Gain := LIMIT(MN := 0, IN := "PID E-105".Gain, MX := 100000);
+
+
+
+// Reset integrals (this should stay at the bottom)
+"CONT_C_E-105".I_ITL_ON := #"E-105 Integral Reset";

@@ -1,0 +1,11 @@
+// Turn on temporary nitrogen if pressure is low, vent is closed, pump is on, and N2 is not already on
+IF "OutputDB"."P-102 1" AND "InputDB"."PT-104" < 1 AND NOT "OutputDB"."T-101 Vent" AND NOT "OutputDB"."T-101 N2" THEN
+    #TemporaryCoolingLoopN2 := true;
+    "OutputDB"."T-101 N2" := true;
+END_IF;
+
+// Turn off temporary nitrogen if pressure rises again, vent is opened, or pump is turned off
+IF #TemporaryCoolingLoopN2 AND ("InputDB"."PT-104" > 1.5 OR "OutputDB"."T-101 Vent" OR NOT "OutputDB"."P-102 1") THEN
+    #TemporaryCoolingLoopN2 := false;
+    "OutputDB"."T-101 N2" := false;
+END_IF;
